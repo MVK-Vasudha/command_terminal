@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Python Command Terminal</title>
+  <style>
+    body { 
+      background: #111; 
+      color: #0f0; 
+      font-family: monospace; 
+      margin: 0; 
+      padding: 20px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #terminal { 
+      width: 100%; 
+      max-width: 1000px; 
+      margin: auto; 
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 40px);
+    }
+    #output-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 10px;
+      border: 1px solid #333;
+      margin-bottom: 10px;
+      background: #000;
+    }
+    #command-input-container {
+      display: flex;
+      gap: 10px;
+    }
+    input { 
+      flex-grow: 1; 
+      background: #111; 
+      color: #0f0; 
+      border: 1px solid #333; 
+      outline: none; 
+      font-size: 16px; 
+      padding: 10px;
+    }
+    .prompt {
+      color: #0ff;
+      margin-right: 5px;
+    }
+    .output { 
+      margin: 5px 0; 
+      white-space: pre-wrap; 
+    }
+    .error { 
+      color: #f00; 
+    }
+    .system-box { 
+      background: #222; 
+      color: #0ff; 
+      border-left: 4px solid #0ff; 
+      padding: 8px; 
+      margin: 5px 0; 
+      font-weight: bold; 
+    }
+    .terminal-header {
+      text-align: center;
+      margin-bottom: 15px;
+      color: #0ff;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+    .command-line {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal">
+    <div class="terminal-header">
+      <h2>🐍 Python Command Terminal</h2>
+      <p>Execute system commands directly in your browser</p>
+    </div>
+    <div id="output-container"></div>
+    <div id="command-input-container">
+      <span class="prompt">user@terminal:~$</span>
+      <input id="commandInput" placeholder="Enter command (try: ls, pwd, mkdir, etc.)" autofocus />
+    </div>
+  </div>
+
+  <script>
+    // Available commands for auto-completion
+    const availableCommands = [
+      "help", "clear", "history", "ls", "pwd", "cd", "mkdir", "rm", "cat", 
+      "whoami", "date", "ps", "df", "uname", "echo", "exit"
+    ];
+    
+    const input = document.getElementById("commandInput");
+    const outputContainer = document.getElementById("output-container");
+
+    // Function to add output to terminal
+    function addOutput(text, isError = false) {
+      const outputDiv = document.createElement("div");
+      outputDiv.className = "output";
+      if (isError) {
+        outputDiv.classList.add("error");
+      }
+      outputDiv.textContent = text;
+      outputContainer.appendChild(outputDiv);
+      outputContainer.scrollTop = outputContainer.scrollHeight;
+    }
+
+    // Function to add command line to terminal
+    function addCommandLine(command) {
+      const commandLine = document.createElement("div");
+      commandLine.className = "command-line";
+      commandLine.innerHTML = `<span class="prompt">user@terminal:~$</span> ${command}`;
+      outputContainer.appendChild(commandLine);
+      outputContainer.scrollTop = outputContainer.scrollHeight;
+    }
+
+    // Function to clear terminal
+    function clearTerminal() {
+      outputContainer.innerHTML = "";
+    }
+
+    // Get command suggestions for auto-completion
+    async function getSuggestions(input) {
+      try {
+        const response = await fetch("/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: input })
+        });
+        const data = await response.json();
+        return data.suggestions || [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    // Handle command execution
+    async function executeCommand(cmd) {
+      if (!cmd.trim()) return;
+
+      // Add command to output
+      addCommandLine(cmd);
+
+      try {
+        const response = await fetch("/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: cmd })
+        });
+        const data = await response.json();
+
+        if (data.error) {
+          addOutput(data.output || "Command failed", true);
+        } else {
+          addOutput(data.output || "");
+        }
+      } catch (error) {
+        addOutput(`Connection error: ${error.message}`, true);
+      }
+    }
+
+    // Handle auto-completion
+    function handleAutoCompletion() {
+      const input = document.getElementById("commandInput");
+      const currentInput = input.value.toLowerCase();
+      
+      if (currentInput.length > 0) {
+        // Simple auto-completion logic - show matching commands
+        const suggestions = availableCommands.filter(cmd => cmd.startsWith(currentInput));
+        if (suggestions.length > 0) {
+          // For simplicity, we'll just show the first suggestion in the output
+          // In a real implementation, this would show a dropdown
+          addOutput(`Suggestions: ${suggestions.join(', ')}`, false);
+        }
+      }
+    }
+
+    // Event listener for Enter key
+    input.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        let cmd = input.value;
+        input.value = "";
+
+        // Special handling for clear command
+        if (cmd.trim() === "clear") {
+          clearTerminal();
+          return;
+        }
+
+        await executeCommand(cmd);
+      }
+    });
+
+    // Event listener for input changes (for auto-completion)
+    input.addEventListener("input", () => {
+      handleAutoCompletion();
+    });
+
+    // Focus input on load
+    window.addEventListener("load", () => {
+      input.focus();
+    });
+
+    // Add initial welcome message
+    window.addEventListener("load", () => {
+      addOutput("Python Command Terminal v1.0");
+      addOutput("Type 'help' for available commands");
+      addOutput("");
+    });
+  </script>
+</body>
+</html>
